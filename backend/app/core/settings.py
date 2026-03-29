@@ -58,6 +58,14 @@ class Settings(BaseSettings):
     openai_api_key: str | None = None
     openai_embedding_model: str = "text-embedding-3-small"
 
+    # Hybrid retrieval (vector + FTS merge)
+    retrieval_default_top_k: int = Field(default=8, ge=1, le=100)
+    retrieval_vector_candidate_multiplier: int = Field(default=3, ge=1, le=20)
+    retrieval_fts_candidate_multiplier: int = Field(default=3, ge=1, le=20)
+    retrieval_weight_vector: float = Field(default=0.62, ge=0.0, le=1.0)
+    retrieval_weight_fts: float = Field(default=0.38, ge=0.0, le=1.0)
+    retrieval_max_query_chars: int = Field(default=8000, ge=100, le=32000)
+
     cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:3000"])
 
     @field_validator("cors_origins", mode="before")
