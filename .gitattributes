@@ -1,0 +1,2 @@
+# Shell entrypoints must use LF inside Linux containers
+*.sh text eol=lf

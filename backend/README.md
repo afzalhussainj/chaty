@@ -1,48 +1,26 @@
 # Backend API
 
-FastAPI application with structured logging, PostgreSQL (SQLAlchemy 2.x), Redis, Celery, and Alembic. See the repository root `README.md` for full stack setup.
+FastAPI application, Alembic migrations, Celery workers, and pytest suite.
 
-## Requirements
+**Project-wide setup, Docker, and documentation live in the [repository root README](../README.md).**
 
-- Python **3.12+** (see `pyproject.toml`)
-
-## Local development
-
-```bash
-cd backend
-python -m venv .venv
-.venv\Scripts\activate   # Windows
-pip install -r requirements-dev.txt
-copy .env.example .env
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-```
-
-- OpenAPI: [http://localhost:8000/docs](http://localhost:8000/docs)
-- Liveness: `GET /health` (process up; does not check DB/Redis)
-- Readiness: `GET /api/health` (checks database + Redis; returns **503** if any dependency is down)
-
-## Configuration
-
-Environment variables are documented in `.env.example`. Application settings are loaded via `app.core.settings.get_settings()` (cached); call `get_settings.cache_clear()` after changing env in tests.
-
-## Migrations
+## Quick commands
 
 ```bash
 alembic upgrade head
-```
-
-## Celery worker
-
-```bash
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 celery -A app.workers.celery_app:celery_app worker -l info
+pytest
 ```
 
-## Tests and lint
+## Configuration
+
+See `.env.example` for local development. When using Docker Compose from the repo root, prefer the root `.env` (see root README).
+
+## Demo tenant seed
 
 ```bash
-pytest
-ruff check app tests
-ruff format app tests
+python scripts/seed_demo_tenant.py
 ```
 
-Integration-style tests (live Postgres/Redis) can be marked with `@pytest.mark.integration` when added.
+(Requires `DATABASE_URL` and migrations applied.)

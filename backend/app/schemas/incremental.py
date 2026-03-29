@@ -24,7 +24,7 @@ class AddSourceRequest(CrawlConfigRef):
 
 
 class SyncChangedRequest(CrawlConfigRef):
-    """Re-validate every active source under this config; index updates only when content changed."""
+    """Re-validate active sources under this config; index only when content changed."""
 
     pass
 
