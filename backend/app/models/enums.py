@@ -70,6 +70,15 @@ class AdminRole(str, enum.Enum):
     tenant_viewer = "tenant_viewer"
 
 
+class CrawlFrequency(str, enum.Enum):
+    """Scheduled crawl cadence (enforcement is via Celery beat in a later phase)."""
+
+    manual = "manual"
+    hourly = "hourly"
+    daily = "daily"
+    weekly = "weekly"
+
+
 class AuditAction(str, enum.Enum):
     create = "create"
     update = "update"

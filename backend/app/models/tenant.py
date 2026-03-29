@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import Enum as SQLEnum
-from sqlalchemy import String
+from sqlalchemy import ForeignKey, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -40,7 +40,26 @@ class Tenant(Base, TimestampMixin):
     )
     settings: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
 
-    crawl_configs: Mapped[list[CrawlConfig]] = relationship(back_populates="tenant")
+    base_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    allowed_domains: Mapped[list[str] | None] = mapped_column(JSONB, nullable=True)
+    branding: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    prompt_settings: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    crawl_settings: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    default_crawl_config_id: Mapped[int | None] = mapped_column(
+        ForeignKey("crawl_configs.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+
+    crawl_configs: Mapped[list[CrawlConfig]] = relationship(
+        back_populates="tenant",
+        foreign_keys="CrawlConfig.tenant_id",
+    )
+    default_crawl_config: Mapped[CrawlConfig | None] = relationship(
+        "CrawlConfig",
+        foreign_keys=[default_crawl_config_id],
+        post_update=True,
+    )
     sources: Mapped[list[Source]] = relationship(back_populates="tenant")
     extracted_documents: Mapped[list[ExtractedDocument]] = relationship(
         back_populates="tenant",

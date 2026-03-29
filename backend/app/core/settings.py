@@ -51,6 +51,10 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 60
 
+    # Optional one-time bootstrap (development only; leave unset in production)
+    bootstrap_admin_email: str | None = None
+    bootstrap_admin_password: str | None = None
+
     openai_api_key: str | None = None
 
     cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:3000"])

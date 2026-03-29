@@ -21,6 +21,9 @@ dependencies = [
     "uvicorn[standard]>=0.32",
     "psycopg[binary]>=3.2",
     "pgvector>=0.3.5",
+    "bcrypt>=4.0",
+    "PyJWT>=2.9",
+    "email-validator>=2.0",
 ]
 
 [project.optional-dependencies]
@@ -50,6 +53,8 @@ select = ["E", "F", "I", "UP", "B"]
 
 [tool.ruff.lint.per-file-ignores]
 "app/models/enums.py" = ["UP042"]
+"app/auth/tokens.py" = ["UP017"]
+"app/services/auth_service.py" = ["UP017"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
