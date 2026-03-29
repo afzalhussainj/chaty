@@ -110,15 +110,15 @@ def execute_crawl_job(session: Session, job_id: int) -> CrawlRunResult:
     return engine.run(seeds, sink)
 
 
-def run_job_to_completion(session: Session, job_id: int) -> None:
-    """Load job, transition status, execute, persist stats (caller commits)."""
+def run_job_to_completion(session: Session, job_id: int) -> bool:
+    """Load job, transition status, execute, persist stats (caller commits). Returns success."""
     repo = CrawlJobRepository(session)
     job = repo.get_by_id(job_id)
     if job is None:
-        return
+        return False
     now = datetime.now(timezone.utc)
     if job.status not in (JobStatus.queued, JobStatus.retrying):
-        return
+        return False
 
     prior_stats = dict(job.stats or {})
     job.status = JobStatus.running
@@ -137,7 +137,7 @@ def run_job_to_completion(session: Session, job_id: int) -> None:
             "error_type": type(exc).__name__,
             "error": str(exc)[:2000],
         }
-        return
+        return False
 
     job.status = JobStatus.succeeded
     job.completed_at = datetime.now(timezone.utc)
@@ -146,3 +146,4 @@ def run_job_to_completion(session: Session, job_id: int) -> None:
         **crawl_stats_to_dict(result.stats),
         "dry_run_records_count": len(result.dry_run_records),
     }
+    return True

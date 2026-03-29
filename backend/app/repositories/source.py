@@ -19,6 +19,10 @@ class SourceRepository:
         )
         return self._session.scalars(stmt).first()
 
+    def get_for_tenant(self, source_id: int, tenant_id: int) -> Source | None:
+        stmt = select(Source).where(Source.id == source_id, Source.tenant_id == tenant_id)
+        return self._session.scalars(stmt).first()
+
     def add(self, entity: Source) -> Source:
         self._session.add(entity)
         self._session.flush()
