@@ -24,6 +24,7 @@ dependencies = [
     "bcrypt>=4.0",
     "PyJWT>=2.9",
     "email-validator>=2.0",
+    "beautifulsoup4>=4.12",
 ]
 
 [project.optional-dependencies]
@@ -55,6 +56,9 @@ select = ["E", "F", "I", "UP", "B"]
 "app/models/enums.py" = ["UP042"]
 "app/auth/tokens.py" = ["UP017"]
 "app/services/auth_service.py" = ["UP017"]
+"app/crawler/types.py" = ["UP042"]
+"app/services/crawl_db_sink.py" = ["UP017"]
+"app/services/crawl_execution_service.py" = ["UP017"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
