@@ -44,4 +44,5 @@ def _configure_worker_logging(**_kwargs: object) -> None:
 
 import app.workers.tasks.crawl  # noqa: E402,F401 — register task
 import app.workers.tasks.extract  # noqa: E402,F401
+import app.workers.tasks.extract_pdf  # noqa: E402,F401
 from app.workers.tasks import ping  # noqa: E402,F401

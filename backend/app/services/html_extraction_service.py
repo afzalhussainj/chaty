@@ -6,16 +6,15 @@ import hashlib
 from typing import Any
 
 import httpx
-from sqlalchemy import delete, select
+from sqlalchemy import delete
 from sqlalchemy.orm import Session
 
 from app.core.settings import get_settings
 from app.extractors.clutter import strip_clutter_html
 from app.extractors.protocol import ExtractorChain, HtmlExtractionResult, HtmlExtractor
 from app.extractors.trafilatura_extractor import TrafilaturaHtmlExtractor
-from app.models.enums import JobStatus, SourceStatus, SourceType
+from app.models.enums import SourceStatus, SourceType
 from app.models.extracted import DocumentChunk, ExtractedDocument
-from app.models.job import CrawlJob
 from app.models.source import Source, SourceSnapshot
 from app.repositories.extracted_document import ExtractedDocumentRepository
 from app.repositories.source_snapshot import SourceSnapshotRepository
@@ -172,43 +171,3 @@ def extract_html_source(
     source.status = SourceStatus.ready_to_index
     session.flush()
     return doc
-
-
-def queue_extractions_after_crawl_job(job_id: int) -> int:
-    """
-    Enqueue Celery extraction tasks for HTML sources touched by a completed crawl job.
-
-    Returns the number of tasks scheduled. No-op if job missing, not succeeded, or dry-run.
-    """
-    from app.db.session import SessionLocal, get_engine
-    from app.workers.tasks.extract import extract_html_source_task
-
-    session = SessionLocal(bind=get_engine())
-    try:
-        job = session.get(CrawlJob, job_id)
-        if job is None or job.status != JobStatus.succeeded:
-            return 0
-        stats = job.stats or {}
-        if stats.get("dry_run"):
-            return 0
-        if job.crawl_config_id is None:
-            return 0
-
-        stmt = (
-            select(Source.id)
-            .where(
-                Source.tenant_id == job.tenant_id,
-                Source.crawl_config_id == job.crawl_config_id,
-                Source.source_type == SourceType.html_page,
-                Source.last_crawled_at.isnot(None),
-            )
-        )
-        if job.started_at is not None:
-            stmt = stmt.where(Source.last_crawled_at >= job.started_at)
-
-        ids = list(session.scalars(stmt))
-        for sid in ids:
-            extract_html_source_task.delay(int(sid))
-        return len(ids)
-    finally:
-        session.close()

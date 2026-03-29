@@ -1,4 +1,4 @@
-"""HTML extraction API schemas."""
+"""HTML / PDF extraction API schemas."""
 
 from __future__ import annotations
 
@@ -17,6 +17,23 @@ class ExtractHtmlResponse(BaseModel):
     source_snapshot_id: int
     title: str | None
     language: str | None
+    extraction_hash: str | None
+
+    model_config = {"from_attributes": True}
+
+
+class ExtractPdfRequest(BaseModel):
+    force: bool = Field(
+        default=False,
+        description="Re-run extractor even when raw PDF bytes match the latest snapshot.",
+    )
+
+
+class ExtractPdfResponse(BaseModel):
+    extracted_document_id: int
+    source_snapshot_id: int
+    title: str | None
+    page_count: int | None
     extraction_hash: str | None
 
     model_config = {"from_attributes": True}
