@@ -332,6 +332,8 @@ class CrawlEngine:
             parent_source_id=parent_id,
         )
         stats.html_sources_upserted += 1
+        if not self._dry_run:
+            stats.touched_source_ids.append(sid)
         return sid
 
     def _record_pdf(
@@ -354,12 +356,14 @@ class CrawlEngine:
                     would_register=True,
                 )
             )
-        sink.register_pdf(
+        pid = sink.register_pdf(
             canonical_url=canonical_url,
             fetched_url=fetched_url,
             parent_source_id=parent_id,
         )
         stats.pdfs_registered += 1
+        if not self._dry_run:
+            stats.touched_source_ids.append(pid)
 
     def _record_html_discovered(
         self,

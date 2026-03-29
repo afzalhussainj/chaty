@@ -44,6 +44,8 @@ def create_job(
     stats: dict = {"dry_run": body.dry_run, "use_sitemap": body.use_sitemap}
     if body.seed_url is not None:
         stats["seed_url"] = str(body.seed_url)
+    if body.workflow:
+        stats["workflow"] = body.workflow
 
     job = CrawlJob(
         tenant_id=tenant_id,
@@ -68,6 +70,7 @@ def create_job(
             "job_type": body.job_type.value,
             "crawl_config_id": body.crawl_config_id,
             "dry_run": body.dry_run,
+            "workflow": body.workflow,
         },
         request=request,
     )

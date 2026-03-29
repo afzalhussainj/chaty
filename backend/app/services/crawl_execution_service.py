@@ -32,6 +32,7 @@ def crawl_stats_to_dict(s: CrawlStats) -> dict[str, object]:
         "skipped_max_pages": s.skipped_max_pages,
         "fetch_errors": s.fetch_errors,
         "sitemap_seeds": s.sitemap_seeds,
+        "touched_source_ids": list(s.touched_source_ids),
         **s.extras,
     }
 
@@ -47,10 +48,14 @@ def _mode_for_job(job_type: CrawlJobType) -> CrawlMode:
 
 def _seed_urls(job: CrawlJob, config: CrawlConfig) -> list[str]:
     stats = job.stats or {}
-    if job.job_type == CrawlJobType.incremental_url:
+    if job.job_type in (
+        CrawlJobType.incremental_url,
+        CrawlJobType.incremental_pdf,
+        CrawlJobType.add_source,
+    ):
         seed = stats.get("seed_url")
         if not seed or not isinstance(seed, str):
-            msg = "incremental_url job requires stats.seed_url"
+            msg = f"{job.job_type.value} job requires stats.seed_url"
             raise ValueError(msg)
         return [seed]
     return [config.base_url]
@@ -62,6 +67,11 @@ def execute_crawl_job(session: Session, job_id: int) -> CrawlRunResult:
     if job is None:
         msg = "Crawl job not found"
         raise ValueError(msg)
+    if job.job_type == CrawlJobType.sync_changed:
+        from app.services.incremental_sync_service import execute_sync_changed_job
+
+        return execute_sync_changed_job(session, job)
+
     if job.crawl_config_id is None:
         msg = "Crawl job has no crawl_config_id"
         raise ValueError(msg)

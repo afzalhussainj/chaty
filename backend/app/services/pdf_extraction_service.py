@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import re
+from datetime import datetime, timezone
 from typing import Any
 
 import httpx
@@ -94,16 +95,9 @@ def _build_pdf_metadata(
     }
 
 
-def _fetch_pdf(url: str, user_agent: str) -> tuple[bytes, str, str]:
-    """Return (bytes, final_url, file_name_hint)."""
+def _http_get_pdf(url: str, user_agent: str) -> httpx.Response:
     with httpx.Client(follow_redirects=True, timeout=120.0) as client:
-        resp = client.get(url, headers={"User-Agent": user_agent})
-        if resp.status_code >= 400:
-            msg = f"HTTP {resp.status_code} fetching PDF URL"
-            raise ValueError(msg)
-        cd_name = _file_name_from_content_disposition(resp.headers.get("content-disposition"))
-        name = cd_name or _file_name_from_url(str(resp.url))
-        return resp.content, str(resp.url), name
+        return client.get(url, headers={"User-Agent": user_agent})
 
 
 def _delete_chunks(session: Session, extracted_document_id: int) -> None:
@@ -141,12 +135,20 @@ def extract_pdf_source(
     ua = f"{settings.app_name}/pdf-extractor"
     ext = extractor or get_default_pdf_extractor()
 
-    try:
-        body, final_url, file_name = _fetch_pdf(source.url, ua)
-    except ValueError:
+    resp = _http_get_pdf(source.url, ua)
+    if resp.status_code == 404:
+        source.is_active = False
+        source.deactivated_at = datetime.now(timezone.utc)
+        session.flush()
+    if resp.status_code >= 400:
         source.status = SourceStatus.extraction_failed
         session.flush()
-        raise
+        msg = f"HTTP {resp.status_code} fetching PDF URL"
+        raise ValueError(msg)
+    body = resp.content
+    final_url = str(resp.url)
+    cd_name = _file_name_from_content_disposition(resp.headers.get("content-disposition"))
+    file_name = cd_name or _file_name_from_url(final_url)
 
     raw_hash = _sha256_bytes(body)
     snap_repo = SourceSnapshotRepository(session)

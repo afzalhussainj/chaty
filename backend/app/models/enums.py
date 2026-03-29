@@ -36,6 +36,7 @@ class CrawlJobType(str, enum.Enum):
     incremental_pdf = "incremental_pdf"
     add_source = "add_source"
     full_recrawl = "full_recrawl"
+    sync_changed = "sync_changed"
 
 
 class IndexJobType(str, enum.Enum):

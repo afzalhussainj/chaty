@@ -64,6 +64,7 @@ class CrawlStats:
     skipped_max_pages: int = 0
     fetch_errors: int = 0
     sitemap_seeds: int = 0
+    touched_source_ids: list[int] = field(default_factory=list)
     extras: dict[str, object] = field(default_factory=dict)
 
 

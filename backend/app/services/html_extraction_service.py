@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+from datetime import datetime, timezone
 from typing import Any
 
 import httpx
@@ -57,13 +58,9 @@ def _build_metadata(source: Source, result: HtmlExtractionResult, final_url: str
     }
 
 
-def _fetch_html(url: str, user_agent: str) -> tuple[bytes, str]:
+def _http_get(url: str, user_agent: str) -> httpx.Response:
     with httpx.Client(follow_redirects=True, timeout=45.0) as client:
-        resp = client.get(url, headers={"User-Agent": user_agent})
-        if resp.status_code >= 400:
-            msg = f"HTTP {resp.status_code} fetching source URL"
-            raise ValueError(msg)
-        return resp.content, str(resp.url)
+        return client.get(url, headers={"User-Agent": user_agent})
 
 
 def _delete_chunks(session: Session, extracted_document_id: int) -> None:
@@ -100,12 +97,18 @@ def extract_html_source(
     ua = f"{settings.app_name}/extractor"
     ext = extractor or get_default_html_extractor()
 
-    try:
-        body, final_url = _fetch_html(source.url, ua)
-    except ValueError:
+    resp = _http_get(source.url, ua)
+    if resp.status_code == 404:
+        source.is_active = False
+        source.deactivated_at = datetime.now(timezone.utc)
+        session.flush()
+    if resp.status_code >= 400:
         source.status = SourceStatus.extraction_failed
         session.flush()
-        raise
+        msg = f"HTTP {resp.status_code} fetching source URL"
+        raise ValueError(msg)
+    body = resp.content
+    final_url = str(resp.url)
     raw_hash = _sha256_bytes(body)
     html = body.decode("utf-8", errors="replace")
 
