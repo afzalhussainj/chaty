@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, status
+from fastapi import APIRouter, HTTPException, status
 
 from app.api.deps import SessionDep
 from app.auth.deps import TenantReaderDep
+from app.auth.rbac import can_read_crawl_config
 from app.retrieval.retrieval_service import retrieve_hybrid
 from app.retrieval.types import RetrievalFilters
 from app.schemas.retrieval import (
@@ -22,13 +23,16 @@ def post_retrieval_debug(
     tenant_id: int,
     body: RetrievalDebugRequest,
     session: SessionDep,
-    _actor: TenantReaderDep,
+    actor: TenantReaderDep,
 ) -> RetrievalDebugResponse:
     """
     Run hybrid retrieval for debugging (tenant-isolated).
 
     Requires PostgreSQL with pgvector + FTS; returns fused scores per chunk.
     """
+    if not can_read_crawl_config(actor, tenant_id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+
     flt: RetrievalFilters | None = None
     if body.filters is not None:
         f = body.filters

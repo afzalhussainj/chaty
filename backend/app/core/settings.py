@@ -85,6 +85,12 @@ class Settings(BaseSettings):
 
     extraction_http_timeout_s: float = Field(default=120.0, ge=10.0, le=600.0)
     extraction_http_max_retries: int = Field(default=2, ge=0, le=8)
+    extraction_max_response_bytes: int = Field(
+        default=50 * 1024 * 1024,
+        ge=256_000,
+        le=200 * 1024 * 1024,
+        description="Reject HTML/PDF fetch bodies larger than this (memory / DoS guard).",
+    )
 
     health_check_celery_workers: bool = False
     """If True, readiness calls Celery inspect (adds latency; requires workers reachable)."""

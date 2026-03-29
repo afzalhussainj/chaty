@@ -114,7 +114,7 @@ def generate_chat_answer(
     for x in cited:
         if isinstance(x, int):
             cited_ints.append(x)
-        elif isinstance(x, str) and x.strip().lstrip("-").isdigit():
+        elif isinstance(x, str) and x.strip().isdigit():
             cited_ints.append(int(x))
     support = _coerce_support(parsed.get("support"))
 
@@ -125,6 +125,10 @@ def generate_chat_answer(
                 "I could not find relevant information in the indexed content for your question. "
                 "Try rephrasing or check back after more site content has been indexed."
             )
+
+    max_ctx = len(retrieval.chunks)
+    if max_ctx > 0:
+        cited_ints = [i for i in cited_ints if 1 <= i <= max_ctx]
 
     cite_objs = citations_for_display(
         chunks_by_index=idx_map,

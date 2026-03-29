@@ -115,6 +115,12 @@ def extract_html_source(
         msg = f"HTTP {resp.status_code} fetching source URL"
         raise ValueError(msg)
     body = resp.content
+    max_bytes = settings.extraction_max_response_bytes
+    if len(body) > max_bytes:
+        source.status = SourceStatus.extraction_failed
+        session.flush()
+        msg = f"HTML response exceeds extraction_max_response_bytes ({max_bytes})"
+        raise ValueError(msg)
     final_url = str(resp.url)
     raw_hash = _sha256_bytes(body)
     html = body.decode("utf-8", errors="replace")

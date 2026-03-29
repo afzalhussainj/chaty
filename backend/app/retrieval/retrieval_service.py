@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import Any
 
 from sqlalchemy import func, literal_column, select
@@ -14,6 +15,33 @@ from app.retrieval.config import load_retrieval_config
 from app.retrieval.hybrid_merge import cosine_distance_to_similarity, merge_hybrid
 from app.retrieval.query_preprocess import fts_query_text, normalize_query
 from app.retrieval.types import ChunkHit, HybridRetrievalResult, Reranker, RetrievalFilters
+
+
+def _narrow_source_filters_for_tenant(
+    session: Session,
+    tenant_id: int,
+    flt: RetrievalFilters,
+) -> RetrievalFilters | None:
+    """
+    Restrict ``source_ids`` to rows owned by ``tenant_id``.
+
+    Returns ``None`` when the caller asked for specific sources but none belong to
+    this tenant (retrieve nothing — avoids widening scope to the full tenant).
+    """
+    if not flt.source_ids:
+        return flt
+    requested = tuple(dict.fromkeys(flt.source_ids))
+    stmt = select(Source.id).where(
+        Source.tenant_id == tenant_id,
+        Source.id.in_(requested),
+    )
+    valid = {int(x) for x in session.scalars(stmt).all()}
+    ordered = tuple(sid for sid in requested if sid in valid)
+    if not ordered:
+        return None
+    if ordered != requested:
+        return replace(flt, source_ids=ordered)
+    return flt
 
 
 def _apply_filters(
@@ -101,6 +129,8 @@ def _load_chunk_rows(
         .join(Source, Source.id == DocumentChunk.source_id)
         .join(ExtractedDocument, ExtractedDocument.id == DocumentChunk.extracted_document_id)
         .where(DocumentChunk.tenant_id == tenant_id)
+        .where(Source.tenant_id == tenant_id)
+        .where(ExtractedDocument.tenant_id == tenant_id)
         .where(DocumentChunk.id.in_(chunk_ids))
     )
     rows = session.execute(stmt).all()
@@ -149,6 +179,17 @@ def retrieve_hybrid(
             fts_candidates=0,
             weights=(cfg.weight_vector, cfg.weight_fts),
         )
+
+    narrowed = _narrow_source_filters_for_tenant(session, tenant_id, flt)
+    if narrowed is None:
+        return HybridRetrievalResult(
+            chunks=(),
+            query_normalized=qn,
+            vector_candidates=0,
+            fts_candidates=0,
+            weights=(cfg.weight_vector, cfg.weight_fts),
+        )
+    flt = narrowed
 
     gen = embedding_generator or OpenAIEmbeddingGenerator()
     qvec = gen.embed_batch([qn])[0]

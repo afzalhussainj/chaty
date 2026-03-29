@@ -153,6 +153,12 @@ def extract_pdf_source(
         msg = f"HTTP {resp.status_code} fetching PDF URL"
         raise ValueError(msg)
     body = resp.content
+    max_bytes = settings.extraction_max_response_bytes
+    if len(body) > max_bytes:
+        source.status = SourceStatus.extraction_failed
+        session.flush()
+        msg = f"PDF response exceeds extraction_max_response_bytes ({max_bytes})"
+        raise ValueError(msg)
     final_url = str(resp.url)
     cd_name = _file_name_from_content_disposition(resp.headers.get("content-disposition"))
     file_name = cd_name or _file_name_from_url(final_url)
