@@ -1,6 +1,7 @@
 """Application settings loaded from environment (Pydantic Settings v2)."""
 
 from functools import lru_cache
+import json
 from typing import Any, Literal
 
 from pydantic import Field, field_validator, model_validator
@@ -15,6 +16,7 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
         extra="ignore",
         case_sensitive=False,
+        enable_decoding=False,
     )
 
     # Application
@@ -101,7 +103,18 @@ class Settings(BaseSettings):
         if value is None:
             return ["http://localhost:3000"]
         if isinstance(value, str):
-            parts = [item.strip() for item in value.split(",") if item.strip()]
+            s = value.strip()
+            if not s:
+                return ["http://localhost:3000"]
+            if s.startswith("["):
+                try:
+                    decoded = json.loads(s)
+                except json.JSONDecodeError:
+                    decoded = None
+                if isinstance(decoded, list):
+                    parts = [str(item).strip() for item in decoded if str(item).strip()]
+                    return parts if parts else ["http://localhost:3000"]
+            parts = [item.strip() for item in s.split(",") if item.strip()]
             return parts if parts else ["http://localhost:3000"]
         return value
 
