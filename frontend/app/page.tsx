@@ -11,7 +11,7 @@ export default function HomePage() {
         </p>
       </div>
       <nav className="flex flex-col gap-3 text-sm">
-        <Link className="text-blue-600 underline hover:text-blue-800" href="/admin">
+        <Link className="text-blue-600 underline hover:text-blue-800" href="/admin/login">
           Admin
         </Link>
         <Link className="text-blue-600 underline hover:text-blue-800" href="/chat">

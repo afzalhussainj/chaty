@@ -2,20 +2,80 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, status
+from typing import Annotated
+
+from fastapi import APIRouter, HTTPException, Query, status
 
 from app.api.deps import SessionDep
-from app.auth.deps import TenantAdminDep
+from app.auth.deps import TenantAdminDep, TenantReaderDep
+from app.schemas.admin_source import (
+    RetryExtractionResponse,
+    SourceExtractionInspectResponse,
+    SourceSummaryResponse,
+)
 from app.schemas.extraction import (
     ExtractHtmlRequest,
     ExtractHtmlResponse,
     ExtractPdfRequest,
     ExtractPdfResponse,
 )
+from app.services import source_browse_service
 from app.services.html_extraction_service import extract_html_source
 from app.services.pdf_extraction_service import extract_pdf_source
 
 router = APIRouter(prefix="/tenants/{tenant_id}/sources", tags=["admin-sources"])
+
+
+@router.get("", response_model=list[SourceSummaryResponse])
+def list_sources(
+    tenant_id: int,
+    session: SessionDep,
+    actor: TenantReaderDep,
+    source_type: Annotated[str | None, Query(description="html_page | pdf | manual_text")] = None,
+    source_status: Annotated[str | None, Query(alias="status")] = None,
+    is_active: Annotated[bool | None, Query()] = None,
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+    offset: Annotated[int, Query(ge=0, le=100_000)] = 0,
+) -> list[SourceSummaryResponse]:
+    return source_browse_service.list_sources(
+        session,
+        tenant_id,
+        actor,
+        source_type=source_type,
+        source_status=source_status,
+        is_active=is_active,
+        limit=limit,
+        offset=offset,
+    )
+
+
+@router.get("/{source_id}/extraction", response_model=SourceExtractionInspectResponse)
+def get_source_extraction(
+    tenant_id: int,
+    source_id: int,
+    session: SessionDep,
+    actor: TenantReaderDep,
+    chunk_limit: Annotated[int, Query(ge=1, le=500)] = 100,
+    chunk_offset: Annotated[int, Query(ge=0)] = 0,
+) -> SourceExtractionInspectResponse:
+    return source_browse_service.inspect_source_extraction(
+        session,
+        tenant_id,
+        source_id,
+        actor,
+        chunk_limit=chunk_limit,
+        chunk_offset=chunk_offset,
+    )
+
+
+@router.post("/{source_id}/retry-extraction", response_model=RetryExtractionResponse)
+def post_retry_source_extraction(
+    tenant_id: int,
+    source_id: int,
+    session: SessionDep,
+    actor: TenantAdminDep,
+) -> RetryExtractionResponse:
+    return source_browse_service.retry_source_extraction(session, tenant_id, source_id, actor)
 
 
 @router.post(

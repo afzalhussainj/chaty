@@ -80,3 +80,18 @@ def create_job(
     run_crawl_job_task.delay(job.id)
 
     return CrawlJobResponse.model_validate(job)
+
+
+def list_jobs(
+    session: Session,
+    tenant_id: int,
+    actor: AdminUser,
+    *,
+    limit: int = 50,
+    offset: int = 0,
+) -> list[CrawlJobResponse]:
+    if not can_read_crawl_config(actor, tenant_id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+    repo = CrawlJobRepository(session)
+    jobs = repo.list_for_tenant(tenant_id, limit=limit, offset=offset)
+    return [CrawlJobResponse.model_validate(j) for j in jobs]

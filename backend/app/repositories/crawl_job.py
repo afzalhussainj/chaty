@@ -23,3 +23,19 @@ class CrawlJobRepository:
         self._session.add(job)
         self._session.flush()
         return job
+
+    def list_for_tenant(
+        self,
+        tenant_id: int,
+        *,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> list[CrawlJob]:
+        stmt = (
+            select(CrawlJob)
+            .where(CrawlJob.tenant_id == tenant_id)
+            .order_by(CrawlJob.id.desc())
+            .limit(limit)
+            .offset(offset)
+        )
+        return list(self._session.scalars(stmt).all())
