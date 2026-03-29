@@ -56,6 +56,7 @@ class Settings(BaseSettings):
     bootstrap_admin_password: str | None = None
 
     openai_api_key: str | None = None
+    openai_embedding_model: str = "text-embedding-3-small"
 
     cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:3000"])
 

@@ -51,6 +51,12 @@ class ExtractedDocument(Base):
     )
 
     extraction_hash: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    indexed_extraction_hash: Mapped[str | None] = mapped_column(
+        String(128),
+        nullable=True,
+        index=True,
+    )
+    indexed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     title: Mapped[str | None] = mapped_column(Text, nullable=True)
     language: Mapped[str | None] = mapped_column(String(32), nullable=True)
     full_text: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -111,6 +117,8 @@ class DocumentChunk(Base, TimestampMixin):
     )
 
     chunk_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    source_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    title: Mapped[str | None] = mapped_column(Text, nullable=True)
     heading: Mapped[str | None] = mapped_column(Text, nullable=True)
     page_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
