@@ -57,6 +57,11 @@ class Settings(BaseSettings):
 
     openai_api_key: str | None = None
     openai_embedding_model: str = "text-embedding-3-small"
+    openai_chat_model: str = "gpt-4o-mini"
+    """Model for grounded chat (OpenAI Responses API)."""
+
+    chat_retrieval_top_k: int = Field(default=8, ge=1, le=32)
+    chat_openai_timeout_s: float = Field(default=120.0, ge=10.0, le=600.0)
 
     # Hybrid retrieval (vector + FTS merge)
     retrieval_default_top_k: int = Field(default=8, ge=1, le=100)
