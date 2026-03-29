@@ -13,6 +13,10 @@ class ErrorDetail(BaseModel):
     code: str = Field(..., description="Stable error code for clients")
     message: str = Field(..., description="Human-readable message")
     details: dict[str, Any] | None = Field(default=None, description="Optional structured detail")
+    request_id: str | None = Field(
+        default=None,
+        description="Correlation ID (matches X-Request-ID / X-Correlation-ID when present)",
+    )
 
 
 class ErrorResponse(BaseModel):

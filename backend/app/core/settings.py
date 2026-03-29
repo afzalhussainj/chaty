@@ -3,7 +3,7 @@
 from functools import lru_cache
 from typing import Any, Literal
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -46,7 +46,7 @@ class Settings(BaseSettings):
     celery_broker_url: str = Field(default="redis://localhost:6379/0")
     celery_result_backend: str = Field(default="redis://localhost:6379/1")
 
-    # Auth (later phases)
+    # Auth — set JWT_SECRET_KEY to a long random value in production
     jwt_secret_key: str = "change-me"
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 60
@@ -76,6 +76,19 @@ class Settings(BaseSettings):
     public_chat_enabled: bool = True
     """Allow unauthenticated POST /public/tenants/{slug}/chat/query (disable in lockdown)."""
 
+    public_chat_rate_limit: str = "30/minute"
+    """slowapi limit string for public chat POST (per client IP)."""
+
+    crawl_http_timeout_s: float = Field(default=45.0, ge=5.0, le=300.0)
+    crawl_http_max_retries: int = Field(default=3, ge=0, le=10)
+    crawl_http_retry_backoff_s: float = Field(default=0.5, ge=0.0, le=30.0)
+
+    extraction_http_timeout_s: float = Field(default=120.0, ge=10.0, le=600.0)
+    extraction_http_max_retries: int = Field(default=2, ge=0, le=8)
+
+    health_check_celery_workers: bool = False
+    """If True, readiness calls Celery inspect (adds latency; requires workers reachable)."""
+
     @field_validator("cors_origins", mode="before")
     @classmethod
     def split_cors_origins(cls, value: Any) -> Any:
@@ -85,6 +98,17 @@ class Settings(BaseSettings):
             parts = [item.strip() for item in value.split(",") if item.strip()]
             return parts if parts else ["http://localhost:3000"]
         return value
+
+    @model_validator(mode="after")
+    def production_safety(self) -> "Settings":
+        if self.app_env == "production":
+            if self.jwt_secret_key.strip() in ("", "change-me"):
+                msg = "JWT_SECRET_KEY must be set to a strong secret when APP_ENV=production"
+                raise ValueError(msg)
+            if self.debug:
+                msg = "DEBUG must be false when APP_ENV=production"
+                raise ValueError(msg)
+        return self
 
 
 @lru_cache(maxsize=1)

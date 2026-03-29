@@ -37,6 +37,11 @@ def write_audit(
     details: dict[str, Any] | None,
     request: Request,
 ) -> None:
+    merged: dict[str, Any] = dict(details) if details else {}
+    rid = getattr(request.state, "request_id", None)
+    if rid and "request_id" not in merged:
+        merged["request_id"] = rid
+
     repo = AuditLogRepository(session)
     entry = AuditLog(
         tenant_id=tenant_id,
@@ -44,7 +49,7 @@ def write_audit(
         action=action,
         resource_type=resource_type,
         resource_id=resource_id,
-        details=details,
+        details=merged if merged else None,
         ip_address=_client_ip(request),
         user_agent=request.headers.get("user-agent"),
     )

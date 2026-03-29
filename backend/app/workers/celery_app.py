@@ -42,6 +42,7 @@ def _configure_worker_logging(**_kwargs: object) -> None:
     configure_logging()
 
 
+import app.workers.logging_hooks  # noqa: E402,F401 — task_id in logs
 import app.workers.tasks.crawl  # noqa: E402,F401 — register task
 import app.workers.tasks.extract  # noqa: E402,F401
 import app.workers.tasks.extract_pdf  # noqa: E402,F401

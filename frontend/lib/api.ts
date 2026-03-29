@@ -6,6 +6,9 @@ const API_BASE =
 export const AUTH_TOKEN_KEY = "chaty_admin_token";
 
 export class ApiError extends Error {
+  readonly requestId?: string;
+  readonly errorCode?: string;
+
   constructor(
     public status: number,
     message: string,
@@ -13,10 +16,27 @@ export class ApiError extends Error {
   ) {
     super(message);
     this.name = "ApiError";
+    if (body && typeof body === "object" && "error" in body) {
+      const inner = (body as { error?: { request_id?: string; code?: string } }).error;
+      if (inner?.request_id) this.requestId = inner.request_id;
+      if (inner?.code) this.errorCode = inner.code;
+    }
   }
 }
 
+function envelopeMessage(data: unknown): string | null {
+  if (data && typeof data === "object" && "error" in data) {
+    const inner = (data as { error?: { message?: string } }).error;
+    if (inner && typeof inner.message === "string") {
+      return inner.message;
+    }
+  }
+  return null;
+}
+
 function detailMessage(data: unknown, fallback: string): string {
+  const env = envelopeMessage(data);
+  if (env) return env;
   if (data && typeof data === "object" && "detail" in data) {
     const d = (data as { detail: unknown }).detail;
     if (typeof d === "string") return d;

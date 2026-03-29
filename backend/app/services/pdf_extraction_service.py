@@ -11,6 +11,7 @@ import httpx
 from sqlalchemy import delete
 from sqlalchemy.orm import Session
 
+from app.core.http_retries import httpx_get_with_retry
 from app.core.settings import get_settings
 from app.extractors.pdf_protocol import PdfExtractionResult, PdfExtractor, PdfPage
 from app.extractors.pymupdf_extractor import PyMuPdfExtractor
@@ -96,8 +97,14 @@ def _build_pdf_metadata(
 
 
 def _http_get_pdf(url: str, user_agent: str) -> httpx.Response:
-    with httpx.Client(follow_redirects=True, timeout=120.0) as client:
-        return client.get(url, headers={"User-Agent": user_agent})
+    s = get_settings()
+    return httpx_get_with_retry(
+        url,
+        user_agent=user_agent,
+        timeout_s=s.extraction_http_timeout_s,
+        max_retries=s.extraction_http_max_retries,
+        backoff_s=s.crawl_http_retry_backoff_s,
+    )
 
 
 def _delete_chunks(session: Session, extracted_document_id: int) -> None:

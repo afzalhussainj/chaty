@@ -12,7 +12,7 @@ router = APIRouter()
 
 @router.get("/health")
 def readiness() -> JSONResponse:
-    """Dependency checks; returns 503 if any critical dependency is down."""
+    """Dependency checks; 503 only when database or Redis is down (critical)."""
     body = build_health_check_response()
-    code = 200 if body.status == "healthy" else 503
+    code = 200 if body.status in ("healthy", "degraded") else 503
     return JSONResponse(status_code=code, content=body.model_dump())

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.enums import SourceType
 
@@ -16,6 +16,8 @@ class ChatRetrievalFiltersBody(BaseModel):
 
 
 class ChatQueryRequest(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+
     message: str = Field(min_length=1, max_length=8000)
     session_id: int | None = Field(
         default=None,

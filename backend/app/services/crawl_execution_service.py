@@ -94,7 +94,12 @@ def execute_crawl_job(session: Session, job_id: int) -> CrawlRunResult:
     settings = get_settings()
     ua = cfg.user_agent or f"{settings.app_name}/crawler"
 
-    fetcher = HttpxFetcher(user_agent=ua)
+    fetcher = HttpxFetcher(
+        user_agent=ua,
+        timeout_s=settings.crawl_http_timeout_s,
+        max_retries=settings.crawl_http_max_retries,
+        retry_backoff_s=settings.crawl_http_retry_backoff_s,
+    )
     mode = _mode_for_job(job.job_type)
 
     sink: DatabaseCrawlSink | DryRunSink

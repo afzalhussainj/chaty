@@ -2,6 +2,7 @@ import { ExternalLink, FileText, Globe } from "lucide-react";
 import * as React from "react";
 
 import type { ChatCitation } from "@/types/public-chat";
+import { isSafeHttpUrl } from "@/lib/safe-url";
 import { cn } from "@/lib/utils";
 
 function sourceIcon(type: string) {
@@ -45,7 +46,7 @@ export function CitationList({
                   <span className="text-xs text-neutral-500">· p.{c.page_number}</span>
                 ) : null}
               </div>
-              {c.url ? (
+              {c.url && isSafeHttpUrl(c.url) ? (
                 <a
                   href={c.url}
                   target="_blank"
@@ -60,6 +61,8 @@ export function CitationList({
                   <ExternalLink className="size-3 shrink-0 opacity-70" aria-hidden />
                   <span className="sr-only">(opens in new tab)</span>
                 </a>
+              ) : c.url ? (
+                <p className="mt-0.5 break-all text-xs text-neutral-600">{c.url}</p>
               ) : (
                 <p className="mt-0.5 text-xs text-neutral-500">No public link available.</p>
               )}

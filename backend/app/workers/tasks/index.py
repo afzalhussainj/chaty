@@ -10,7 +10,14 @@ from app.models.extracted import ExtractedDocument
 from app.workers.celery_app import celery_app
 
 
-@celery_app.task(name="index.extracted_document")
+@celery_app.task(
+    name="index.extracted_document",
+    autoretry_for=(Exception,),
+    retry_kwargs={"max_retries": 2, "countdown": 30},
+    retry_backoff=True,
+    retry_backoff_max=600,
+    retry_jitter=True,
+)
 def index_extracted_document_task(
     extracted_document_id: int,
     index_job_id: int | None = None,

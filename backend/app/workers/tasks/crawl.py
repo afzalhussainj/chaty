@@ -10,6 +10,10 @@ from app.workers.celery_app import celery_app
 
 @celery_app.task(name="crawl.run_job")
 def run_crawl_job_task(job_id: int) -> None:
+    """
+    Run a crawl job to completion. Not auto-retried at the Celery layer: full crawls are
+    long-running and should be re-queued explicitly after fixing upstream issues.
+    """
     session = SessionLocal(bind=get_engine())
     try:
         ok = run_job_to_completion(session, job_id)

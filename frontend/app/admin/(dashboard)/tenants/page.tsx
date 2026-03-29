@@ -25,7 +25,7 @@ import type { Tenant } from "@/types/admin";
 export default function TenantsPage() {
   const { me, loading } = useAdmin();
   const [rows, setRows] = React.useState<Tenant[]>([]);
-  const [error, setError] = React.useState<string | null>(null);
+  const [error, setError] = React.useState<unknown>(null);
   const [busy, setBusy] = React.useState(false);
   const [name, setName] = React.useState("");
   const [slug, setSlug] = React.useState("");
@@ -37,7 +37,7 @@ export default function TenantsPage() {
     try {
       setRows(await listTenants(token));
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Failed to load");
+      setError(e);
     }
   }, []);
 
@@ -71,8 +71,8 @@ export default function TenantsPage() {
       setSlug("");
       await load();
     } catch (e: unknown) {
+      setError(e);
       const msg = e instanceof Error ? e.message : "Create failed";
-      setError(msg);
       toast.error(msg);
     } finally {
       setBusy(false);
@@ -85,7 +85,7 @@ export default function TenantsPage() {
         title="Tenants"
         description="Create and open tenant workspaces."
       />
-      <ErrorAlert message={error} />
+      <ErrorAlert error={error} />
       <form
         onSubmit={onCreate}
         className="mb-8 grid max-w-lg gap-4 rounded-lg border border-neutral-200 bg-white p-4"

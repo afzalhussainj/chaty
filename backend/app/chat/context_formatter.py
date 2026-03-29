@@ -2,7 +2,18 @@
 
 from __future__ import annotations
 
+import re
+
 from app.retrieval.types import RetrievedChunk
+
+_ZW_RE = re.compile(r"[\u200b-\u200f\u202a-\u202e\u2060-\u206f]")
+
+
+def _sanitize_user_question(text: str) -> str:
+    """Strip control / obfuscation characters before escaping (prompt-injection hygiene)."""
+    t = "".join(ch for ch in text if ord(ch) >= 32 or ch in "\n\t\r")
+    t = _ZW_RE.sub("", t)
+    return t.strip()
 
 
 def _escape_context_text(text: str) -> str:
@@ -55,7 +66,7 @@ def build_user_message(
     answer_mode: str,
 ) -> str:
     """Single user turn combining mode, question, and CONTEXT (instructions stay separate)."""
-    q = _escape_context_text(user_question.strip())
+    q = _escape_context_text(_sanitize_user_question(user_question))
     mode = "concise" if answer_mode == "concise" else "detailed"
     if not context_block.strip():
         return (

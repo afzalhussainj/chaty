@@ -4,11 +4,15 @@ from __future__ import annotations
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from slowapi.errors import RateLimitExceeded
+from slowapi.extension import _rate_limit_exceeded_handler
+from slowapi.middleware import SlowAPIMiddleware
 
 from app.api.exception_handlers import register_exception_handlers
 from app.api.router import api_router
 from app.core.lifespan import lifespan
 from app.core.logging import configure_logging, get_logger
+from app.core.rate_limit import public_limiter
 from app.core.settings import get_settings
 from app.middleware.request_context import RequestContextMiddleware
 from app.schemas.common import LivenessResponse
@@ -29,6 +33,10 @@ def create_app() -> FastAPI:
 
     register_exception_handlers(app)
 
+    app.state.limiter = public_limiter
+    app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+    app.add_middleware(SlowAPIMiddleware)
     app.add_middleware(RequestContextMiddleware)
     app.add_middleware(
         CORSMiddleware,

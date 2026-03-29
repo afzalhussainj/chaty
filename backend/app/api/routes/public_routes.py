@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Request, status
 
 from app.api.deps import SessionDep, SettingsDep
+from app.core.rate_limit import public_limiter
+from app.core.settings import get_settings
 from app.models.enums import TenantStatus
 from app.repositories.tenant import TenantRepository
 from app.schemas.chat_query import ChatQueryRequest, ChatQueryResponse
@@ -12,6 +14,8 @@ from app.schemas.public_tenant import PublicTenantBranding, PublicTenantResponse
 from app.services.chat_query_service import execute_chat_query
 
 router = APIRouter(prefix="/public", tags=["public"])
+
+_PUBLIC_CHAT_RATE = get_settings().public_chat_rate_limit
 
 
 def _branding_from_tenant(raw: dict | None) -> PublicTenantBranding | None:
@@ -48,7 +52,9 @@ def get_public_tenant_by_slug(slug: str, session: SessionDep) -> PublicTenantRes
     "/tenants/{slug}/chat/query",
     response_model=ChatQueryResponse,
 )
+@public_limiter.limit(_PUBLIC_CHAT_RATE)
 def post_public_chat_query(
+    request: Request,
     slug: str,
     body: ChatQueryRequest,
     session: SessionDep,
