@@ -73,6 +73,9 @@ class Settings(BaseSettings):
 
     cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:3000"])
 
+    public_chat_enabled: bool = True
+    """Allow unauthenticated POST /public/tenants/{slug}/chat/query (disable in lockdown)."""
+
     @field_validator("cors_origins", mode="before")
     @classmethod
     def split_cors_origins(cls, value: Any) -> Any:

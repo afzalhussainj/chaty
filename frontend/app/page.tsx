@@ -15,7 +15,7 @@ export default function HomePage() {
           Admin
         </Link>
         <Link className="text-blue-600 underline hover:text-blue-800" href="/chat">
-          Public chatbot
+          Campus assistant (by slug)
         </Link>
       </nav>
     </main>
