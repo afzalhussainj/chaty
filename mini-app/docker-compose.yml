@@ -1,0 +1,113 @@
+# Full stack: Postgres (pgvector), Redis, FastAPI, Celery worker, Next.js.
+#
+# Copy .env.example to .env and set at least OPENAI_API_KEY.
+# Compose loads .env automatically for variable substitution.
+#
+#   docker compose up --build
+#
+# UI: http://localhost:3000 · API docs: http://localhost:8000/docs · Health: GET /health
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: chaty
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d chaty"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  backend:
+    build:
+      context: .
+      dockerfile: infra/docker/Dockerfile.api
+    environment:
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@postgres:5432/chaty
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+      CORS_ORIGINS: http://localhost:3000
+      APP_ENV: development
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-dev-change-me}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_CHAT_MODEL: ${OPENAI_CHAT_MODEL:-gpt-4o-mini}
+      OPENAI_EMBEDDING_MODEL: ${OPENAI_EMBEDDING_MODEL:-text-embedding-3-small}
+      SITE_SLUG: ${SITE_SLUG:-default}
+      SITE_NAME: ${SITE_NAME:-Campus Assistant}
+      SITE_BASE_URL: ${SITE_BASE_URL:-https://example.edu/}
+      SITE_ALLOWED_DOMAINS: ${SITE_ALLOWED_DOMAINS:-example.edu}
+      PUBLIC_CHAT_ENABLED: ${PUBLIC_CHAT_ENABLED:-true}
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          'python -c "import urllib.request; urllib.request.urlopen(\"http://127.0.0.1:8000/health\")"',
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 8
+      start_period: 60s
+
+  worker:
+    build:
+      context: .
+      dockerfile: infra/docker/Dockerfile.worker
+    environment:
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@postgres:5432/chaty
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+      APP_ENV: development
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-dev-change-me}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_CHAT_MODEL: ${OPENAI_CHAT_MODEL:-gpt-4o-mini}
+      OPENAI_EMBEDDING_MODEL: ${OPENAI_EMBEDDING_MODEL:-text-embedding-3-small}
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: .
+      dockerfile: infra/docker/Dockerfile.web
+      args:
+        NEXT_PUBLIC_APP_URL: http://localhost:3000
+        NEXT_PUBLIC_API_BASE_URL: http://localhost:8000/api
+        NEXT_PUBLIC_SITE_SLUG: ${SITE_SLUG:-default}
+    environment:
+      NODE_ENV: production
+      NEXT_PUBLIC_APP_URL: http://localhost:3000
+      NEXT_PUBLIC_API_BASE_URL: http://localhost:8000/api
+      NEXT_PUBLIC_SITE_SLUG: ${SITE_SLUG:-default}
+    ports:
+      - "3000:3000"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  pgdata:
