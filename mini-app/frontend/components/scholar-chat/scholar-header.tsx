@@ -9,7 +9,7 @@ export function ScholarHeader({ displayTitle }: ScholarHeaderProps) {
     <header className="relative z-10 w-full bg-[#0f2a57] px-4 py-6 text-[#faf7f2] shadow-md md:px-8">
       <div className="mx-auto flex max-w-4xl flex-col items-start justify-between gap-4 md:flex-row md:items-center">
         <div className="flex items-center gap-3">
-          <div className="size-12 shrink-0 overflow-hidden rounded-xl border border-[#f2c94c]/60 bg-[#133062] p-1 shadow-inner">
+          <div className="size-20 shrink-0 overflow-hidden rounded-xl border border-[#f2c94c]/60 bg-[#faf7f2] p-1 shadow-inner">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src="/unibot-mark.svg"
