@@ -14,3 +14,7 @@ export function tenantPrimaryCss(color: string | null | undefined): string {
 export function sessionStorageKey(slug: string): string {
   return `chaty_public_session_${slug}`;
 }
+
+export function messagesStorageKey(slug: string): string {
+  return `chaty_public_messages_${slug}`;
+}

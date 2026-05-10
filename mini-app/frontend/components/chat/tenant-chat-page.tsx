@@ -7,13 +7,55 @@ import { ScholarEmptyState } from "@/components/scholar-chat/scholar-empty-state
 import { ScholarHeader } from "@/components/scholar-chat/scholar-header";
 import { ScholarMessageList } from "@/components/scholar-chat/scholar-message-list";
 import { ApiError } from "@/lib/api";
-import { tenantPrimaryCss, sessionStorageKey } from "@/lib/branding";
+import { messagesStorageKey, sessionStorageKey, tenantPrimaryCss } from "@/lib/branding";
 import { fetchPublicTenant, postPublicChatQuery } from "@/lib/public-chat-api";
 import type { PublicTenantInfo } from "@/types/public-chat";
 import type { ScholarMessage } from "@/types/scholar-chat";
 
 function newId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+}
+
+function makeGreetingMessage(): ScholarMessage {
+  return {
+    id: newId(),
+    role: "assistant",
+    content:
+      "Welcome. I am UniBot, your knowledge-base assistant. I provide answers from university sources and include citations so you can verify key details. How can I help you today?",
+  };
+}
+
+function toPersistableMessages(messages: ScholarMessage[]): ScholarMessage[] {
+  return messages
+    .filter((m) => !m.isLoading)
+    .map((m) => ({
+      id: m.id,
+      role: m.role,
+      content: m.content,
+      citations: m.citations,
+      support: m.support,
+      isError: m.isError,
+      errorMessage: m.errorMessage,
+      noResult: m.noResult,
+    }));
+}
+
+function parseStoredMessages(raw: string | null): ScholarMessage[] {
+  if (!raw) return [];
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(
+      (x): x is ScholarMessage =>
+        typeof x === "object" &&
+        x !== null &&
+        ("role" in x && ((x as { role?: unknown }).role === "user" || (x as { role?: unknown }).role === "assistant")) &&
+        "content" in x &&
+        typeof (x as { content?: unknown }).content === "string",
+    );
+  } catch {
+    return [];
+  }
 }
 
 export function TenantChatPage({ slug }: { slug: string }) {
@@ -27,6 +69,22 @@ export function TenantChatPage({ slug }: { slug: string }) {
 
   const displayTitle =
     tenant?.branding?.app_title?.trim() || tenant?.name || "UniBot";
+
+  React.useEffect(() => {
+    if (typeof window === "undefined") return;
+    const stored = parseStoredMessages(localStorage.getItem(messagesStorageKey(slug)));
+    setMessages(stored.length > 0 ? stored : [makeGreetingMessage()]);
+  }, [slug]);
+
+  React.useEffect(() => {
+    if (typeof window === "undefined") return;
+    const persistable = toPersistableMessages(messages);
+    if (persistable.length === 0) {
+      localStorage.removeItem(messagesStorageKey(slug));
+      return;
+    }
+    localStorage.setItem(messagesStorageKey(slug), JSON.stringify(persistable));
+  }, [messages, slug]);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -135,9 +193,10 @@ export function TenantChatPage({ slug }: { slug: string }) {
   );
 
   const handleClearChat = React.useCallback(() => {
-    setMessages([]);
+    setMessages([makeGreetingMessage()]);
     if (typeof window !== "undefined") {
       sessionStorage.removeItem(sessionStorageKey(slug));
+      localStorage.removeItem(messagesStorageKey(slug));
     }
   }, [slug]);
 
