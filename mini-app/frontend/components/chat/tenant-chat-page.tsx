@@ -232,20 +232,17 @@ export function TenantChatPage({ slug }: { slug: string }) {
     >
       <ScholarHeader displayTitle={displayTitle} />
       <main className="relative flex min-h-0 flex-1 flex-col">
-        <div className="relative min-h-0 flex-1 overflow-hidden">
+        <div className="relative isolate min-h-0 flex-1 overflow-hidden">
           {/* Soft watermark behind scrollable chat; does not capture pointer events */}
           <div
             className="pointer-events-none absolute inset-0 z-0 overflow-hidden select-none"
             aria-hidden
           >
-            <div className="absolute left-1/2 top-1/2 flex h-[min(48vh,400px)] w-[min(88vw,420px)] -translate-x-1/2 -translate-y-1/2 items-center justify-center opacity-[0.085] blur-[2px]">
-              <img
-                src="/uet-logo.svg"
-                alt=""
-                className="max-h-full max-w-full object-contain"
-                draggable={false}
-              />
-            </div>
+            {/* Background-image paints more reliably than a blurred <img> at very low opacity */}
+            <div
+              className="absolute left-1/2 top-1/2 h-[min(52vh,460px)] w-[min(92vw,480px)] -translate-x-1/2 -translate-y-1/2 bg-contain bg-center bg-no-repeat opacity-[0.22] [filter:blur(2.5px)]"
+              style={{ backgroundImage: "url(/uet-logo.svg)" }}
+            />
           </div>
           <div className="relative z-10 flex min-h-0 flex-1 flex-col">
             {messages.length === 0 ? (
