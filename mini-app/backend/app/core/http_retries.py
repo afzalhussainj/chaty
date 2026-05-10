@@ -6,7 +6,9 @@ import time
 
 import httpx
 
-_TRANSIENT_STATUS = {502, 503, 504}
+# Upstream / proxy errors (incl. common Cloudflare edge codes) — often worth retrying.
+TRANSIENT_HTTP_STATUSES: frozenset[int] = frozenset({502, 503, 504, 520, 521, 522, 523, 524})
+_TRANSIENT_STATUS = TRANSIENT_HTTP_STATUSES
 
 
 def httpx_get_with_retry(
@@ -17,7 +19,7 @@ def httpx_get_with_retry(
     max_retries: int,
     backoff_s: float = 0.5,
 ) -> httpx.Response:
-    """Retry transport failures and 502/503/504 with exponential backoff."""
+    """Retry transport failures and transient HTTP statuses (502–504, common Cloudflare 52x) with backoff."""
     attempt = 0
     while True:
         try:

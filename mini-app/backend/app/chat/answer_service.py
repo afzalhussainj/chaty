@@ -16,6 +16,7 @@ from app.core.settings import get_settings
 from app.indexing.embeddings import OpenAIEmbeddingGenerator
 from app.models.enums import ChatRole
 from app.repositories.chat import ChatMessageRepository, ChatSessionRepository
+from app.retrieval.query_preprocess import is_smalltalk_query
 from app.retrieval.retrieval_service import retrieve_hybrid
 from app.retrieval.types import RetrievalFilters
 
@@ -36,6 +37,14 @@ def _coerce_support(raw: object) -> str:
     if s in ("high", "partial", "none"):
         return s
     return "none"
+
+
+def _smalltalk_reply() -> str:
+    return (
+        "Hello! I am UniBot, your intelligent prospectus assistant. "
+        "You can ask me about admissions, fee structure, departments, student societies, "
+        "rules, scholarships, or any topic available on UET's website and documents."
+    )
 
 
 def generate_chat_answer(
@@ -72,6 +81,36 @@ def generate_chat_answer(
         content=user_message.strip(),
         sequence=seq,
     )
+
+    if is_smalltalk_query(user_message):
+        answer = _smalltalk_reply()
+        aseq = sess_repo.next_sequence(chat_sess.id)
+        msg_repo.add(
+            tenant_id=tenant_id,
+            session_id=chat_sess.id,
+            role=ChatRole.assistant,
+            content=answer,
+            sequence=aseq,
+            retrieval_trace={
+                "smalltalk": True,
+                "support": "none",
+                "cited_chunk_indices": [],
+            },
+        )
+        if chat_sess.title is None and user_message.strip():
+            chat_sess.title = user_message.strip()[:120]
+        return ChatAnswerResult(
+            answer=answer,
+            citations=(),
+            support="none",
+            session_id=int(chat_sess.id),
+            retrieval={
+                "chunks_returned": 0,
+                "vector_candidates": 0,
+                "fts_candidates": 0,
+                "query_normalized": user_message.strip(),
+            },
+        )
 
     k = top_k if top_k is not None else settings.chat_retrieval_top_k
     retrieval = retrieve_hybrid(

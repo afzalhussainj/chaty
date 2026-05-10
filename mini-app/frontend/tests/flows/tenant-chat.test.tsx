@@ -40,11 +40,11 @@ describe("TenantChatPage", () => {
     render(<TenantChatPage slug="test-u" />);
 
     await waitFor(() => {
-      expect(screen.queryByText(/Loading assistant/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/Getting things ready/)).not.toBeInTheDocument();
     });
 
     await user.type(
-      screen.getByPlaceholderText(/Type your question/),
+      screen.getByPlaceholderText(/Ask your question here/),
       "When is tuition due?",
     );
     await user.click(screen.getByRole("button", { name: /Send message/ }));

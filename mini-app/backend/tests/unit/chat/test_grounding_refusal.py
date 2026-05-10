@@ -94,3 +94,33 @@ def test_invalid_json_from_model_raises() -> None:
             assert "invalid JSON" in str(e).lower() or "JSON" in str(e)
         else:
             raise AssertionError("expected RuntimeError")
+
+
+def test_greeting_short_circuits_retrieval() -> None:
+    fake_sess = MagicMock(id=11, title=None)
+    settings = MagicMock(
+        openai_api_key="sk-test",
+        openai_chat_model="gpt-4o-mini",
+        chat_retrieval_top_k=5,
+        chat_openai_timeout_s=30.0,
+    )
+    with (
+        patch("app.chat.answer_service.retrieve_hybrid") as mocked_retrieval,
+        patch("app.chat.answer_service.get_settings", return_value=settings),
+        patch("app.chat.answer_service.ChatSessionRepository") as CSR,
+        patch("app.chat.answer_service.ChatMessageRepository"),
+    ):
+        CSR.return_value.get.return_value = None
+        CSR.return_value.create.return_value = fake_sess
+        CSR.return_value.next_sequence.side_effect = [0, 1]
+        db = MagicMock()
+        r = generate_chat_answer(
+            db,
+            tenant_id=1,
+            user_message="hello",
+            session_id=None,
+            answer_mode="concise",
+        )
+    mocked_retrieval.assert_not_called()
+    assert r.support == "none"
+    assert "unibot" in r.answer.lower()

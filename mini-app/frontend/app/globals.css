@@ -19,6 +19,20 @@
     @apply border-neutral-200;
   }
   body {
-    @apply bg-neutral-50 text-neutral-950;
+    @apply text-neutral-950;
   }
+}
+
+/* Scholar chat — subtle scrollbar (WebKit) */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  @apply rounded-full bg-slate-300;
+}
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-slate-400;
 }

@@ -88,6 +88,24 @@ class Settings(BaseSettings):
     crawl_http_timeout_s: float = Field(default=45.0, ge=5.0, le=300.0)
     crawl_http_max_retries: int = Field(default=3, ge=0, le=10)
     crawl_http_retry_backoff_s: float = Field(default=0.5, ge=0.0, le=30.0)
+    crawl_max_concurrency: int = Field(default=6, ge=1, le=64)
+    crawl_max_response_bytes: int = Field(
+        default=8 * 1024 * 1024,
+        ge=256_000,
+        le=100 * 1024 * 1024,
+        description="Maximum bytes to read per crawl HTTP response.",
+    )
+    crawl_user_agent: str | None = Field(
+        default=None,
+        description="Optional User-Agent for crawler HTTP requests when crawl_config.user_agent is unset.",
+    )
+    crawl_commit_after_each_source: bool = Field(
+        default=True,
+        description=(
+            "If True, commit DB after each successfully fetched HTML page or PDF Source row so partial "
+            "progress survives interruptions; updates crawl_jobs.stats incrementally."
+        ),
+    )
 
     extraction_http_timeout_s: float = Field(default=120.0, ge=10.0, le=600.0)
     extraction_http_max_retries: int = Field(default=2, ge=0, le=8)

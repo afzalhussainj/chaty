@@ -11,30 +11,13 @@ from app.crawler.engine import CrawlEngine, CrawlRunResult
 from app.crawler.fetch import HttpxFetcher
 from app.crawler.rules import CrawlRules
 from app.crawler.sink import DryRunSink
-from app.crawler.types import CrawlMode, CrawlStats
+from app.crawler.types import CrawlMode, CrawlStats, crawl_stats_to_dict
 from app.models.crawl_config import CrawlConfig
 from app.models.enums import CrawlJobType, JobStatus
 from app.models.job import CrawlJob
 from app.models.tenant import Tenant
 from app.repositories.crawl_job import CrawlJobRepository
 from app.services.crawl_db_sink import DatabaseCrawlSink
-
-
-def crawl_stats_to_dict(s: CrawlStats) -> dict[str, object]:
-    return {
-        "pages_fetched": s.pages_fetched,
-        "pdfs_registered": s.pdfs_registered,
-        "html_sources_upserted": s.html_sources_upserted,
-        "html_discovered_registered": s.html_discovered_registered,
-        "skipped_robots": s.skipped_robots,
-        "skipped_not_allowed": s.skipped_not_allowed,
-        "skipped_depth": s.skipped_depth,
-        "skipped_max_pages": s.skipped_max_pages,
-        "fetch_errors": s.fetch_errors,
-        "sitemap_seeds": s.sitemap_seeds,
-        "touched_source_ids": list(s.touched_source_ids),
-        **s.extras,
-    }
 
 
 def _mode_for_job(job_type: CrawlJobType) -> CrawlMode:
@@ -92,21 +75,31 @@ def execute_crawl_job(session: Session, job_id: int) -> CrawlRunResult:
 
     rules = CrawlRules.from_config(cfg, tenant)
     settings = get_settings()
-    ua = cfg.user_agent or f"{settings.app_name}/crawler"
+    ua = cfg.user_agent or settings.crawl_user_agent or f"{settings.app_name}/crawler"
 
     fetcher = HttpxFetcher(
         user_agent=ua,
         timeout_s=settings.crawl_http_timeout_s,
         max_retries=settings.crawl_http_max_retries,
         retry_backoff_s=settings.crawl_http_retry_backoff_s,
+        max_response_bytes=settings.crawl_max_response_bytes,
     )
     mode = _mode_for_job(job.job_type)
 
     sink: DatabaseCrawlSink | DryRunSink
+    crawl_stats = CrawlStats()
     if dry_run:
         sink = DryRunSink()
     else:
-        sink = DatabaseCrawlSink(session, job.tenant_id, job.crawl_config_id)
+        sink = DatabaseCrawlSink(
+            session,
+            job.tenant_id,
+            job.crawl_config_id,
+            commit_after_each_source=settings.crawl_commit_after_each_source,
+            job_id=job.id,
+            prior_job_stats=dict(job.stats or {}),
+            live_stats=crawl_stats,
+        )
 
     engine = CrawlEngine(
         rules,
@@ -119,10 +112,11 @@ def execute_crawl_job(session: Session, job_id: int) -> CrawlRunResult:
         user_agent=ua,
         use_sitemap=use_sitemap and mode == CrawlMode.full,
         dry_run=dry_run,
+        max_concurrency=settings.crawl_max_concurrency,
     )
 
     seeds = _seed_urls(job, cfg)
-    return engine.run(seeds, sink)
+    return engine.run(seeds, sink, stats=crawl_stats)
 
 
 def run_job_to_completion(session: Session, job_id: int) -> bool:

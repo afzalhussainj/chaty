@@ -12,7 +12,7 @@ export function SupportBadge({ support }: { support: string | undefined }) {
         )}
       >
         <CheckCircle2 className="size-3.5" aria-hidden />
-        Grounded in indexed content
+        Based on university sources
       </span>
     );
   }
@@ -24,7 +24,7 @@ export function SupportBadge({ support }: { support: string | undefined }) {
         )}
       >
         <HelpCircle className="size-3.5" aria-hidden />
-        Partial match — verify with sources
+        Partial match — please check the references
       </span>
     );
   }
@@ -35,7 +35,7 @@ export function SupportBadge({ support }: { support: string | undefined }) {
       )}
     >
       <AlertTriangle className="size-3.5" aria-hidden />
-      Limited indexed content for this question
+      Not enough matching source content yet
     </span>
   );
 }

@@ -96,7 +96,8 @@ def _fts_search(
     limit: int,
 ) -> list[ChunkHit]:
     tsv = literal_column("document_chunks.content_tsv")
-    tsq = func.plainto_tsquery(literal_column("simple"), fts_text)
+    # Must be a string literal in SQL — unquoted `simple` is parsed as a column name.
+    tsq = func.plainto_tsquery(literal_column("'simple'::regconfig"), fts_text)
     rank = func.ts_rank_cd(tsv, tsq)
     stmt = (
         select(DocumentChunk.id, rank.label("rk"))

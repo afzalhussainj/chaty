@@ -54,7 +54,7 @@ class RobotsChecker:
                 if r.status_code >= 400:
                     return None
                 text = r.text
-        except OSError:
+        except (OSError, httpx.HTTPError, httpx.RequestError):
             return None
         rp = RobotFileParser()
         rp.set_url(robots_url)

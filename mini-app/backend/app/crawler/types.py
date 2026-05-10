@@ -68,6 +68,24 @@ class CrawlStats:
     extras: dict[str, object] = field(default_factory=dict)
 
 
+def crawl_stats_to_dict(s: CrawlStats) -> dict[str, object]:
+    """Counters + extras for persisting on `CrawlJob.stats` JSON."""
+    return {
+        "pages_fetched": s.pages_fetched,
+        "pdfs_registered": s.pdfs_registered,
+        "html_sources_upserted": s.html_sources_upserted,
+        "html_discovered_registered": s.html_discovered_registered,
+        "skipped_robots": s.skipped_robots,
+        "skipped_not_allowed": s.skipped_not_allowed,
+        "skipped_depth": s.skipped_depth,
+        "skipped_max_pages": s.skipped_max_pages,
+        "fetch_errors": s.fetch_errors,
+        "sitemap_seeds": s.sitemap_seeds,
+        "touched_source_ids": list(s.touched_source_ids),
+        **s.extras,
+    }
+
+
 @dataclass(slots=True)
 class DryRunRecord:
     """One discovered URL in dry-run mode (no DB writes)."""

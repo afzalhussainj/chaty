@@ -7,6 +7,7 @@ from typing import Protocol, runtime_checkable
 
 import httpx
 
+from app.core.http_retries import TRANSIENT_HTTP_STATUSES
 from app.crawler.types import FetchResult
 
 
@@ -30,12 +31,14 @@ class HttpxFetcher:
         max_redirects: int = 10,
         max_retries: int = 3,
         retry_backoff_s: float = 0.5,
+        max_response_bytes: int = 8 * 1024 * 1024,
     ) -> None:
         self._user_agent = user_agent or "university-chatbot-crawler/1.0"
         self._timeout = timeout_s
         self._max_redirects = max_redirects
         self._max_retries = max(0, max_retries)
         self._retry_backoff_s = retry_backoff_s
+        self._max_response_bytes = max(256_000, max_response_bytes)
 
     def _fetch_once(self, url: str, *, method: str) -> FetchResult:
         headers = {"User-Agent": self._user_agent}
@@ -43,25 +46,47 @@ class HttpxFetcher:
         with httpx.Client(
             follow_redirects=True,
             max_redirects=self._max_redirects,
-            timeout=self._timeout,
+            timeout=httpx.Timeout(
+                connect=self._timeout,
+                read=self._timeout,
+                write=self._timeout,
+                pool=self._timeout,
+            ),
         ) as client:
-            resp = client.request(method, url, headers=headers)
-            for h in resp.history:
-                redirect_chain.append(str(h.url))
-            body = resp.content
-            ct = resp.headers.get("content-type")
-            return FetchResult(
-                url_requested=url,
-                final_url=str(resp.url),
-                status_code=resp.status_code,
-                content_type=ct,
-                body=body,
-                redirect_urls=tuple(redirect_chain),
-            )
+            started = time.monotonic()
+            with client.stream(method, url, headers=headers) as resp:
+                for h in resp.history:
+                    redirect_chain.append(str(h.url))
+
+                body = bytearray()
+                for chunk in resp.iter_bytes():
+                    if time.monotonic() - started > self._timeout:
+                        raise httpx.ReadTimeout(
+                            f"Timed out while reading response body from {url}",
+                            request=resp.request,
+                        )
+                    body.extend(chunk)
+                    if len(body) > self._max_response_bytes:
+                        raise httpx.ReadTimeout(
+                            (
+                                "Response body exceeded crawler max_response_bytes "
+                                f"({self._max_response_bytes}) for {url}"
+                            ),
+                            request=resp.request,
+                        )
+
+                ct = resp.headers.get("content-type")
+                return FetchResult(
+                    url_requested=url,
+                    final_url=str(resp.url),
+                    status_code=resp.status_code,
+                    content_type=ct,
+                    body=bytes(body),
+                    redirect_urls=tuple(redirect_chain),
+                )
 
     def fetch(self, url: str, *, method: str = "GET") -> FetchResult:
-        """Transient transport errors and 502/503/504 are retried with backoff."""
-        transient_status = {502, 503, 504}
+        """Transient transport errors and retryable HTTP statuses are retried with backoff."""
         attempt = 0
         while True:
             try:
@@ -74,7 +99,7 @@ class HttpxFetcher:
                 continue
 
             if (
-                result.status_code in transient_status
+                result.status_code in TRANSIENT_HTTP_STATUSES
                 and attempt < self._max_retries
             ):
                 attempt += 1

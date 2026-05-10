@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 from dataclasses import dataclass
+
+import httpx
 
 from app.crawler.discovery import content_type_is_pdf, parse_links_from_href
 from app.crawler.fetch import HttpFetcher
@@ -40,6 +43,16 @@ def _sniff_pdf(body: bytes) -> bool:
     return len(body) >= 4 and body[:4] == b"%PDF"
 
 
+def _safe_debug_snippet(body: bytes, limit: int = 120) -> str:
+    """
+    Decode a short body preview for debug stats, removing NUL/control chars.
+
+    PostgreSQL JSONB rejects \\u0000 in text payloads, so sanitize before storing.
+    """
+    raw = body[:limit].decode("utf-8", errors="replace")
+    return raw.replace("\x00", "")
+
+
 @dataclass(slots=True)
 class CrawlRunResult:
     stats: CrawlStats
@@ -66,6 +79,7 @@ class CrawlEngine:
         user_agent: str,
         use_sitemap: bool,
         dry_run: bool,
+        max_concurrency: int = 4,
     ) -> None:
         self._rules = rules
         self._fetcher = fetcher
@@ -79,14 +93,17 @@ class CrawlEngine:
         )
         self._use_sitemap = use_sitemap
         self._dry_run = dry_run
+        self._max_concurrency = max(1, min(max_concurrency, 64))
 
     def run(
         self,
         seed_urls: list[str],
         sink: CrawlSink | None,
+        *,
+        stats: CrawlStats | None = None,
     ) -> CrawlRunResult:
         effective_sink: CrawlSink = sink if sink is not None else DryRunSink()
-        stats = CrawlStats()
+        stats = stats if stats is not None else CrawlStats()
         dry: list[DryRunRecord] = []
 
         if self._mode == CrawlMode.single_page:
@@ -110,110 +127,168 @@ class CrawlEngine:
                 stats.extras["sitemap_error"] = "fetch_failed"
 
         pages = 0
-        while len(frontier) > 0:
-            if pages >= self._max_pages:
-                break
-            item = frontier.dequeue()
-            if item is None:
-                break
-            if item.depth > self._max_depth:
-                stats.skipped_depth += 1
-                continue
-            if not self._rules.allows_url(item.canonical_url):
-                stats.skipped_not_allowed += 1
-                continue
-            if not self._robots.allowed(item.canonical_url):
-                stats.skipped_robots += 1
-                continue
-
-            try:
-                fr = self._fetcher.fetch(item.canonical_url)
-            except OSError:
-                stats.fetch_errors += 1
-                continue
-
-            pages += 1
-            stats.pages_fetched += 1
-
-            if fr.status_code >= 400:
-                stats.fetch_errors += 1
-                continue
-
-            try:
-                final_canon = normalize_url(fr.final_url)
-            except ValueError:
-                final_canon = item.canonical_url
-
-            if not self._rules.allows_url(final_canon):
-                stats.skipped_not_allowed += 1
-                continue
-
-            ct = (fr.content_type or "").lower()
-            is_pdf = (
-                content_type_is_pdf(fr.content_type)
-                or _sniff_pdf(fr.body)
-                or (looks_like_pdf_url(final_canon) and not _sniff_html(fr.body))
-            )
-            if is_pdf:
-                if self._allow_pdf:
-                    self._record_pdf(
-                        effective_sink,
-                        final_canon,
-                        fr.final_url,
-                        item.discovered_from_source_id,
-                        stats,
-                        dry,
-                        item.depth,
-                    )
-                continue
-
-            if "html" not in ct and "text/" not in ct and not _sniff_html(fr.body):
-                continue
-
-            try:
-                html = fr.body.decode("utf-8")
-            except UnicodeDecodeError:
-                html = fr.body.decode("utf-8", errors="replace")
-
-            title = extract_title(html)
-            sid = self._record_html_page(
-                effective_sink,
-                final_canon,
-                fr.final_url,
-                title,
-                item.discovered_from_source_id,
-                stats,
-                dry,
-                item.depth,
-            )
-
-            for href in extract_anchor_hrefs(html):
-                pl = parse_links_from_href(href, fr.final_url)
-                if pl is None or not self._rules.allows_url(pl.absolute_url):
-                    if pl is not None:
+        pending: dict[Future[FetchResult], FrontierItem] = {}
+        with ThreadPoolExecutor(max_workers=self._max_concurrency) as pool:
+            while len(frontier) > 0 or pending:
+                while len(frontier) > 0 and len(pending) < self._max_concurrency:
+                    if pages + len(pending) >= self._max_pages:
+                        break
+                    item = frontier.dequeue()
+                    if item is None:
+                        break
+                    if item.depth > self._max_depth:
+                        stats.skipped_depth += 1
+                        continue
+                    if not self._rules.allows_url(item.canonical_url):
                         stats.skipped_not_allowed += 1
+                        continue
+                    if not self._robots.allowed(item.canonical_url):
+                        stats.skipped_robots += 1
+                        continue
+                    fut = pool.submit(self._fetcher.fetch, item.canonical_url)
+                    pending[fut] = item
+
+                if not pending:
+                    if pages >= self._max_pages:
+                        break
                     continue
-                if pl.kind == "pdf":
-                    if self._allow_pdf:
-                        self._record_pdf(
-                            effective_sink,
-                            pl.absolute_url,
-                            pl.absolute_url,
-                            sid,
-                            stats,
-                            dry,
-                            item.depth + 1,
-                        )
+
+                done, _ = wait(tuple(pending.keys()), return_when=FIRST_COMPLETED, timeout=1.0)
+                if not done:
                     continue
-                if pl.kind != "html":
-                    continue
-                nd = item.depth + 1
-                if nd > self._max_depth:
-                    stats.skipped_depth += 1
-                    continue
-                frontier.enqueue(FrontierItem(pl.absolute_url, nd, sid))
+
+                for fut in done:
+                    item = pending.pop(fut)
+                    try:
+                        fr = fut.result()
+                    except (OSError, httpx.HTTPError, httpx.RequestError):
+                        stats.fetch_errors += 1
+                        continue
+
+                    pages += 1
+                    stats.pages_fetched += 1
+                    if pages % 20 == 0:
+                        stats.extras["progress_last_pages_fetched"] = pages
+                        stats.extras["progress_frontier_remaining"] = len(frontier)
+                        stats.extras["progress_pending_fetches"] = len(pending)
+                    self._process_fetch_result(
+                        item=item,
+                        fr=fr,
+                        sink=effective_sink,
+                        stats=stats,
+                        dry=dry,
+                        frontier=frontier,
+                    )
 
         return CrawlRunResult(stats=stats, dry_run_records=dry)
+
+    def _process_fetch_result(
+        self,
+        *,
+        item: FrontierItem,
+        fr: FetchResult,
+        sink: CrawlSink,
+        stats: CrawlStats,
+        dry: list[DryRunRecord],
+        frontier: CrawlFrontier,
+    ) -> None:
+        if fr.status_code >= 400:
+            stats.fetch_errors += 1
+            errs = stats.extras.setdefault("http_status_errors", [])
+            if isinstance(errs, list) and len(errs) < 8:
+                errs.append(
+                    {
+                        "url": item.canonical_url,
+                        "status": fr.status_code,
+                        "final_url": str(fr.final_url),
+                        "content_type": fr.content_type,
+                    },
+                )
+            return
+
+        try:
+            final_canon = normalize_url(fr.final_url)
+        except ValueError:
+            final_canon = item.canonical_url
+
+        if not self._rules.allows_url(final_canon):
+            stats.skipped_not_allowed += 1
+            return
+
+        ct = (fr.content_type or "").lower()
+        is_pdf = (
+            content_type_is_pdf(fr.content_type)
+            or _sniff_pdf(fr.body)
+            or (looks_like_pdf_url(final_canon) and not _sniff_html(fr.body))
+        )
+        if is_pdf:
+            if self._allow_pdf:
+                self._record_pdf(
+                    sink,
+                    final_canon,
+                    fr.final_url,
+                    item.discovered_from_source_id,
+                    stats,
+                    dry,
+                    item.depth,
+                )
+            return
+
+        if "html" not in ct and "text/" not in ct and not _sniff_html(fr.body):
+            nh = stats.extras.setdefault("non_html_ok_responses", [])
+            if isinstance(nh, list) and len(nh) < 8:
+                nh.append(
+                    {
+                        "url": item.canonical_url,
+                        "status": fr.status_code,
+                        "content_type": fr.content_type,
+                            "snippet": _safe_debug_snippet(fr.body),
+                    },
+                )
+            return
+
+        try:
+            html = fr.body.decode("utf-8")
+        except UnicodeDecodeError:
+            html = fr.body.decode("utf-8", errors="replace")
+
+        title = extract_title(html)
+        sid = self._record_html_page(
+            sink,
+            final_canon,
+            fr.final_url,
+            title,
+            item.discovered_from_source_id,
+            stats,
+            dry,
+            item.depth,
+        )
+
+        for href in extract_anchor_hrefs(html):
+            pl = parse_links_from_href(href, fr.final_url)
+            if pl is None or not self._rules.allows_url(pl.absolute_url):
+                if pl is not None:
+                    stats.skipped_not_allowed += 1
+                continue
+            if pl.kind == "pdf":
+                if self._allow_pdf:
+                    self._record_pdf(
+                        sink,
+                        pl.absolute_url,
+                        pl.absolute_url,
+                        sid,
+                        stats,
+                        dry,
+                        item.depth + 1,
+                    )
+                continue
+            if pl.kind != "html":
+                continue
+            nd = item.depth + 1
+            if nd > self._max_depth:
+                stats.skipped_depth += 1
+                continue
+            frontier.enqueue(FrontierItem(pl.absolute_url, nd, sid))
 
     def _seed_frontier(
         self,
@@ -251,13 +326,23 @@ class CrawlEngine:
 
         try:
             fr = self._fetcher.fetch(canon)
-        except OSError:
+        except (OSError, httpx.HTTPError, httpx.RequestError):
             stats.fetch_errors += 1
             return CrawlRunResult(stats=stats, dry_run_records=dry)
 
         stats.pages_fetched += 1
         if fr.status_code >= 400:
             stats.fetch_errors += 1
+            errs = stats.extras.setdefault("http_status_errors", [])
+            if isinstance(errs, list) and len(errs) < 8:
+                errs.append(
+                    {
+                        "url": canon,
+                        "status": fr.status_code,
+                        "final_url": str(fr.final_url),
+                        "content_type": fr.content_type,
+                    },
+                )
             return CrawlRunResult(stats=stats, dry_run_records=dry)
 
         try:
@@ -280,6 +365,16 @@ class CrawlEngine:
             return CrawlRunResult(stats=stats, dry_run_records=dry)
 
         if "html" not in ct and "text/" not in ct and not _sniff_html(fr.body):
+            nh = stats.extras.setdefault("non_html_ok_responses", [])
+            if isinstance(nh, list) and len(nh) < 8:
+                nh.append(
+                    {
+                        "url": final_canon,
+                        "status": fr.status_code,
+                        "content_type": fr.content_type,
+                        "snippet": _safe_debug_snippet(fr.body),
+                    },
+                )
             return CrawlRunResult(stats=stats, dry_run_records=dry)
 
         try:

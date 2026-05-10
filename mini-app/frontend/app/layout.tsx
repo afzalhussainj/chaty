@@ -4,8 +4,8 @@ import { Toaster } from "sonner";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "University Chatbot Platform",
-  description: "Multi-tenant university website RAG chatbot",
+  title: "University website assistant",
+  description: "Grounded answers from your university’s indexed web pages and PDFs.",
 };
 
 export default function RootLayout({
@@ -15,7 +15,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className="min-h-screen antialiased">
+      <body className="min-h-screen bg-[#faf7f2] font-sans antialiased text-slate-900">
         {children}
         <Toaster richColors position="top-right" />
       </body>
