@@ -21,7 +21,7 @@ function makeGreetingMessage(): ScholarMessage {
     id: newId(),
     role: "assistant",
     content:
-      "Welcome. I am UniBot, your knowledge-base assistant. I provide answers from university sources and include citations so you can verify key details. How can I help you today?",
+      "Welcome to UniBot, UET's admissions assistant. I am here to help you make confident decisions with clear, reliable answers from our knowledge base, each reply includes citations you can review. How may I assist you today?",
   };
 }
 
@@ -232,13 +232,31 @@ export function TenantChatPage({ slug }: { slug: string }) {
     >
       <ScholarHeader displayTitle={displayTitle} />
       <main className="relative flex min-h-0 flex-1 flex-col">
-        {messages.length === 0 ? (
-          <div className="min-h-0 flex-1 overflow-y-auto">
-            <ScholarEmptyState onSelectPrompt={handleSendMessage} />
+        <div className="relative min-h-0 flex-1 overflow-hidden">
+          {/* Soft watermark behind scrollable chat; does not capture pointer events */}
+          <div
+            className="pointer-events-none absolute inset-0 z-0 overflow-hidden select-none"
+            aria-hidden
+          >
+            <div className="absolute left-1/2 top-1/2 flex h-[min(48vh,400px)] w-[min(88vw,420px)] -translate-x-1/2 -translate-y-1/2 items-center justify-center opacity-[0.085] blur-[2px]">
+              <img
+                src="/uet-logo.svg"
+                alt=""
+                className="max-h-full max-w-full object-contain"
+                draggable={false}
+              />
+            </div>
           </div>
-        ) : (
-          <ScholarMessageList messages={messages} />
-        )}
+          <div className="relative z-10 flex min-h-0 flex-1 flex-col">
+            {messages.length === 0 ? (
+              <div className="min-h-0 flex-1 overflow-y-auto">
+                <ScholarEmptyState onSelectPrompt={handleSendMessage} />
+              </div>
+            ) : (
+              <ScholarMessageList messages={messages} />
+            )}
+          </div>
+        </div>
         <ScholarChatInput
           onSend={handleSendMessage}
           onClear={handleClearChat}
